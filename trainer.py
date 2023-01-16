@@ -1,0 +1,10 @@
+# train
+# validation
+# evaluation
+class trainer():
+    def train():
+        return loss
+    def valid():
+        return loss
+    def evaluation():
+        return JGA

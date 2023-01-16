@@ -1,0 +1,34 @@
+###### audio 관련 파라미터
+epochs: 1000
+iters_per_checkpoint: 1000
+seed: 1234
+dynamic_loss_scaling: True
+fp16_run: False
+distributed_run: False #originally True
+
+dist_backend: nccl
+dist_url: tcp://localhost:54323
+cudnn_enabled: True
+cudnn_benchmark: False
+ignore_layers: embedding.weight
+
+training_files: "filelists/1speaker_7emotions/v3_kor_emotion_train_skipped.txt"
+validation_files: "filelists/1speaker_7emotions/v3_kor_emotion_val_skipped.txt"
+
+
+###### audio 관련 파라미터
+num_mels:  80 #Number of mel-spectrogram channels and local conditioning dimensionality
+max_wav_value: 32768.0 # one wav2 point store in 2bytes and 32768 is the max value of 2 bytes (2^15)
+sampling_rate: 16000 # originally 22050
+filter_length: 1024 # originally 1024 -> first link: scale to 2048 for 48k sampling; filter length should be bigger than or equal to win_length
+hop_length: 200 ## 12.5ms frame shift:  for 22050 Hz 0.0125*sample rate :  0.0125*22050: 275.625; originally 256
+win_length: 800 ##frame length is 4 times of frame shift; originally 1024
+n_mel_channels: 80 #originally 80
+mel_fmin: 0.0 #male female voices have different pitch ranges..? see tacotron2 code by rayhane; originally 0.0; rayhane:  55 for male 95 for female to help w/ reducing noise
+mel_fmax: 8000.0 # both links scale this value according to the sampling rate. originally 8000.0; if None, half the sampling rate
+f0_min: 80
+f0_max: 880
+harm_thresh: 0.25
+
+hgf_w2v2_ckpt: "wav2vec2/k-wav2vec_huggingface"
+fs_w2v2_ckpt: "wav2vec2/k-wav2vec_fairseq/checkpoint_best.pt"
