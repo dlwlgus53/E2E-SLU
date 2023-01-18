@@ -203,12 +203,12 @@ class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
             mean_features = torch.stack(mean_features)
             std_features = torch.stack(std_features)
 
-        print("statistic")
-        print(hidden_states.size())
-        print(mean_features.size())
-        print(std_features.size())
+        # print("statistic")
+        # print(hidden_states.size())
+        # print(mean_features.size())
+        # print(std_features.size())
         statistic_pooling = torch.cat([mean_features, std_features], dim=-1)
-        print(statistic_pooling.size())
+        # print(statistic_pooling.size())
 
         output_embeddings = self.feature_extractor(statistic_pooling)
         logits = self.classifier(output_embeddings)
@@ -306,13 +306,19 @@ if __name__ == "__main__":
     )
 
     with torch.no_grad():
-        logits = model(input_values_dict)
+        outputs = model(input_values_dict)
+
+    system_output = outputs[0]
+    user_output = outputs[1]
+
+    print(system_output.logits.size())
+    print(user_output.logits.size())
 
     # logits = logits[1] # User
-    logits = logits[0]  # System
-    print(logits.embeddings.size())
-    print(logits.logits.size())
+    # logits = logits[0]  # System
+    # print(logits.embeddings.size())
+    # print(logits.logits.size())
 
-    print(model.wav2vec2.projector)
-    print(model.wav2vec2.feature_extractor)
-    print(model.wav2vec2.classifier)
+    # print(model.wav2vec2.projector)
+    # print(model.wav2vec2.feature_extractor)
+    # print(model.wav2vec2.classifier)
