@@ -12,6 +12,52 @@ import torch.nn.functional as F
 from transformers import T5ForConditionalGeneration, T5Config
 import os
 
+
+"""
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved
+
+Author: Dejiao Zhang (dejiaoz@amazon.com)
+Date: 02/26/2021
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn import Parameter
+from transformers import BertPreTrainedModel
+import pdb
+# from transformers import AutoModel, AutoTokenizer
+
+class Text_Encoder(nn.Module):
+    def __init__(self, bert_model, tokenizer, class_num):
+        super(Text_Encoder, self).__init__()
+        
+        self.tokenizer = tokenizer
+        self.bert = bert_model
+        self.emb_size = self.bert.config.hidden_size
+        
+        # Instance-CL head
+        self.classification_head = nn.Sequential(
+            nn.Linear(self.emb_size, self.emb_size),
+            nn.ReLU(inplace=True),
+            nn.Linear(self.emb_size, class_num))
+        
+    
+    def forward(self, input_ids, attention_mask):
+        embeded = self.get_mean_embeddings( input_ids,attention_mask)
+        output= self.classification_head(embeded)
+        return output
+
+    
+    def get_mean_embeddings(self, input_ids, attention_mask):
+        bert_output = self.bert.forward(input_ids=input_ids, attention_mask=attention_mask)
+        attention_mask = attention_mask.unsqueeze(-1)
+        mean_output = torch.sum(bert_output[0]*attention_mask, dim=1) / torch.sum(attention_mask, dim=1)
+        return mean_output
+    
+
+
+
 class T5Gen_Model(nn.Module):
     def __init__(self, model_path, tokenizer, special_token_list, dropout, add_special_decoder_token, is_training):
         super().__init__()

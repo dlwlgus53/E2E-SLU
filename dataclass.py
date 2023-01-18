@@ -19,6 +19,8 @@ import argparse
 from collections import defaultdict
 import ontology
 import os
+from transformers import AutoModel, AutoTokenizer, AutoConfig
+
 # logging.set_verbosity_error()
 
 
@@ -142,17 +144,17 @@ class E2Edataclass:
         sys_audio_path = [x["sys_audio_path"] for x in batch]
 
 
-        # question = self.text_tokenizer.batch_encode_plus(question, max_length = self.text_max_length, \
-        # padding=True, return_tensors='pt', truncation = True)
+        question = self.text_tokenizer.batch_encode_plus(question, max_length = self.text_max_length, \
+        padding=True, return_tensors='pt', truncation = True)
 
-        # target = self.text_tokenizer.batch_encode_plus(target, max_length = self.text_max_length, \
-        # padding=True, return_tensors='pt', truncation = True)
+        target = self.text_tokenizer.batch_encode_plus(target, max_length = self.text_max_length, \
+        padding=True, return_tensors='pt', truncation = True)
 
 
         # TODO : encode user and system seperately
 
         
-        return {"input_text": question, "target": target, "turn_id" : turn_id,"dial_id" : dial_id,
+        return {"text_input": question, "target": target, "turn_id" : turn_id,"dial_id" : dial_id,
         'user_audio_path' : user_audio_path, 'sys_audio_path' : sys_audio_path }
 
 
@@ -160,7 +162,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--text_test_data_path' , type = str, default= './woz_data/test_data.json')
     parser.add_argument('--audio_test_file_list', type = str, default = "./audio_data/E2E-SLU-filelists/finalfilelist-test_all.txt")
-    parser.add_argument('--base_trained', type = str, default = "t5-small", help =" pretrainned model from 🤗")
+    parser.add_argument('--base_trained', type = str, default = "sentence-transformers/all-mpnet-base-v2", help =" pretrainned model from 🤗")
 
 
     # /home/jihyunlee/woz-data/MultiWOZ_2.1/split0.01/labeled.json
@@ -174,7 +176,8 @@ if __name__ == '__main__':
     t = test_dataset.text_tokenizer
     for batch in test_data_loader:
         for i in range(3):
-            print(batch['input_text'][0])
-            print(batch['user_audio_path'][0])
+            print(t.decode(batch['text_input']['input_ids'][i], skip_special_tokens= True))
+            print(t.decode(batch['target']['input_ids'][i], skip_special_tokens= True))
+            print(batch['user_audio_path'][i])
         break
 
