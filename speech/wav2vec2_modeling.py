@@ -163,6 +163,7 @@ class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
             True if self.config.use_weighted_layer_sum else output_hidden_states
         )
 
+        # output_hidden_states = True
         outputs = self.wav2vec2(
             input_values,
             attention_mask=attention_mask,
@@ -171,6 +172,11 @@ class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
             return_dict=return_dict,
         )
 
+        # print("ABC")
+        # print("BBB", outputs.last_hidden_state)
+
+        # print(len(outputs.hidden_states[12]))
+
         if self.config.use_weighted_layer_sum:
             hidden_states = outputs[_HIDDEN_STATES_START_POSITION]
             hidden_states = torch.stack(hidden_states, dim=1)
@@ -178,6 +184,7 @@ class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
             hidden_states = (hidden_states * norm_weights.view(-1, 1, 1)).sum(dim=1)
         else:
             hidden_states = outputs[0]
+            # print("AAA", hidden_states.size())
 
         hidden_states = self.projector(hidden_states)
 
@@ -233,14 +240,18 @@ class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
 
 
 class AudioEncoder(PreTrainedModel):
+
+    # Is __init__ called even after PreTrainedModel.from_pretrained?
     def __init__(self, config: PretrainedConfig, *inputs, **kwargs):
         super().__init__(config, *inputs, **kwargs)
-        self.wav2vec2 = Wav2Vec2ForXVector.from_pretrained("facebook/wav2vec2-base")
+        self.wav2vec2_xvector = Wav2Vec2ForXVector.from_pretrained(
+            "facebook/wav2vec2-base"
+        )
 
     def forward(self, input_values_dict):
 
         system_input = input_values_dict["system"]
-        system_output = self.wav2vec2(
+        system_output = self.wav2vec2_xvector(
             system_input.input_values,
             system_input.attention_mask,
             system_input.output_attentions,
@@ -249,7 +260,7 @@ class AudioEncoder(PreTrainedModel):
         )
 
         user_input = input_values_dict["user"]
-        user_output = self.wav2vec2(
+        user_output = self.wav2vec2_xvector(
             user_input.input_values,
             user_input.attention_mask,
             user_input.output_attentions,
@@ -262,7 +273,6 @@ class AudioEncoder(PreTrainedModel):
 
 @dataclass
 class PairedAudioData:
-
     input_values: Optional[torch.Tensor]
     attention_mask: Optional[torch.Tensor] = None
     output_attentions: Optional[bool] = None
@@ -274,6 +284,10 @@ class PairedAudioData:
 def build_paired_audio(system_path, user_path, processor):
 
     input_values_dict = {}
+    # At first turn, there is no system utterence.
+    # Thus we use user utterence instead. (2x user utterence)
+    if system_path == None:
+        system_path = user_path
     for key, path in zip(("system", "user"), (system_path, user_path)):
         speech, sample_rate = torchaudio.load(str(path))
         if sample_rate != 16000:
@@ -299,6 +313,7 @@ if __name__ == "__main__":
     # model = Wav2Vec2ForXVector.from_pretrained("facebook/wav2vec2-base").to(device)
     processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base")
 
+    # We may need DataCollator for batch training.
     input_values_dict = build_paired_audio(
         system_path="/home/lee1jun/develop/dev_all/MUL0032/MUL0032-0-system.wav",
         user_path="/home/lee1jun/develop/dev_all/MUL0032/MUL0032-0-user.wav",
