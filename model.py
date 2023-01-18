@@ -32,8 +32,9 @@ class T5Gen_Model(nn.Module):
         self.model.resize_token_embeddings(len(self.tokenizer)) 
         self.add_special_decoder_token = add_special_decoder_token
 
+    ## THIS IS IMPORTANT PART ##
     def forward(self, src_input, src_mask, tgt_input, tgt_output):
-        src_mask = src_mask.type(src_input.type())
+        src_mask = src_mask.type(src_input.type()) 
         outputs = self.model(input_ids=src_input, attention_mask=src_mask, decoder_input_ids=tgt_input, labels=tgt_output)
         loss = outputs[0]#.mean()
         return loss

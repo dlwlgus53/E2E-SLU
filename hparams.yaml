@@ -12,9 +12,6 @@ cudnn_enabled: True
 cudnn_benchmark: False
 ignore_layers: embedding.weight
 
-training_files: "filelists/1speaker_7emotions/v3_kor_emotion_train_skipped.txt"
-validation_files: "filelists/1speaker_7emotions/v3_kor_emotion_val_skipped.txt"
-
 
 ###### audio 관련 파라미터
 num_mels:  80 #Number of mel-spectrogram channels and local conditioning dimensionality
@@ -30,5 +27,5 @@ f0_min: 80
 f0_max: 880
 harm_thresh: 0.25
 
-hgf_w2v2_ckpt: "wav2vec2/k-wav2vec_huggingface"
+hgf_w2v2_ckpt: "wav2vec2/k-wav2vec_huggingface" # 바꿔야 될 것. 영어 pretrained checkpoint download하기
 fs_w2v2_ckpt: "wav2vec2/k-wav2vec_fairseq/checkpoint_best.pt"
