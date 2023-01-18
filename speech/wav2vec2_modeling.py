@@ -3,6 +3,8 @@ from transformers import (
     Wav2Vec2Model,
     Wav2Vec2PreTrainedModel,
     Wav2Vec2Processor,
+    PreTrainedModel,
+    PretrainedConfig,
 )
 from transformers.modeling_outputs import XVectorOutput, Wav2Vec2BaseModelOutput
 import warnings
@@ -200,7 +202,13 @@ class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
                 std_features.append(hidden_states[i, :length].std(dim=0))
             mean_features = torch.stack(mean_features)
             std_features = torch.stack(std_features)
+
+        print("statistic")
+        print(hidden_states.size())
+        print(mean_features.size())
+        print(std_features.size())
         statistic_pooling = torch.cat([mean_features, std_features], dim=-1)
+        print(statistic_pooling.size())
 
         output_embeddings = self.feature_extractor(statistic_pooling)
         logits = self.classifier(output_embeddings)
@@ -224,30 +232,87 @@ class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
         )
 
 
+class AudioEncoder(PreTrainedModel):
+    def __init__(self, config: PretrainedConfig, *inputs, **kwargs):
+        super().__init__(config, *inputs, **kwargs)
+        self.wav2vec2 = Wav2Vec2ForXVector.from_pretrained("facebook/wav2vec2-base")
+
+    def forward(self, input_values_dict):
+
+        system_input = input_values_dict["system"]
+        system_output = self.wav2vec2(
+            system_input.input_values,
+            system_input.attention_mask,
+            system_input.output_attentions,
+            system_input.output_hidden_states,
+            system_input.return_dict,
+        )
+
+        user_input = input_values_dict["user"]
+        user_output = self.wav2vec2(
+            user_input.input_values,
+            user_input.attention_mask,
+            user_input.output_attentions,
+            user_input.output_hidden_states,
+            user_input.return_dict,
+        )
+
+        return (system_output, user_output)
+
+
+@dataclass
+class PairedAudioData:
+
+    input_values: Optional[torch.Tensor]
+    attention_mask: Optional[torch.Tensor] = None
+    output_attentions: Optional[bool] = None
+    output_hidden_states: Optional[bool] = None
+    return_dict: Optional[bool] = None
+
+
+# TODO: build attention mask, ...
+def build_paired_audio(system_path, user_path, processor):
+
+    input_values_dict = {}
+    for key, path in zip(("system", "user"), (system_path, user_path)):
+        speech, sample_rate = torchaudio.load(str(path))
+        if sample_rate != 16000:
+            speech = torchaudio.transforms.Resample(sample_rate, 16000).forward(speech)
+        speech = speech[0][:320000]
+
+        input_values = processor.feature_extractor(
+            speech,
+            sampling_rate=16000,
+            return_tensors="pt",
+        ).input_values
+
+        input_values_dict[key] = PairedAudioData(input_values=input_values)
+
+    return input_values_dict
+
+
 if __name__ == "__main__":
     device = "cpu"
-
-    model = Wav2Vec2ForXVector.from_pretrained("facebook/wav2vec2-base").to(device)
+    config = PretrainedConfig()
+    print(config)
+    model = AudioEncoder(config).to(device)
+    # model = Wav2Vec2ForXVector.from_pretrained("facebook/wav2vec2-base").to(device)
     processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base")
-    # print(model)
-    path = "/home/lee1jun/develop/dev_all/MUL0032/MUL0032-0-user.wav"
-    speech, sample_rate = torchaudio.load(str(path))
-    if sample_rate != 16000:
-        speech = torchaudio.transforms.Resample(sample_rate, 16000).forward(speech)
-    speech = speech[0][:160000]
 
-    input_values = processor.feature_extractor(
-        speech,
-        sampling_rate=16000,
-        return_tensors="pt",
-    ).input_values.to(device)
+    input_values_dict = build_paired_audio(
+        system_path="/home/lee1jun/develop/dev_all/MUL0032/MUL0032-0-system.wav",
+        user_path="/home/lee1jun/develop/dev_all/MUL0032/MUL0032-0-user.wav",
+        processor=processor,
+    )
 
     with torch.no_grad():
-        logits = model(input_values)
+        logits = model(input_values_dict)
 
+    # logits = logits[1] # User
+    logits = logits[0]  # System
     print(logits.embeddings.size())
     print(logits.logits.size())
 
-    print(model.projector)
-    print(model.feature_extractor)
-    print(model.classifier)
+    print(model.wav2vec2.projector)
+    print(model.wav2vec2.feature_extractor)
+    print(model.wav2vec2.classifier)
