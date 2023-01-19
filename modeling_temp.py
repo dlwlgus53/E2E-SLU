@@ -265,7 +265,7 @@ if __name__ == "__main__":
     )
 
     test_data_loader = torch.utils.data.DataLoader(
-        dataset=test_dataset, batch_size=4, collate_fn=test_dataset.collate_fn
+        dataset=test_dataset, batch_size=1, collate_fn=test_dataset.collate_fn
     )
 
     best_val_loss = float("inf")
