@@ -34,7 +34,7 @@ class Text_Encoder(nn.Module):
     def __init__(self, bert_model, tokenizer, class_num):
         super(Text_Encoder, self).__init__()
 
-        self.tokenizer = tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(args.text_encoder_model)
         self.bert = bert_model
         self.emb_size = self.bert.config.hidden_size
 

@@ -104,7 +104,6 @@ class E2Edataclass:
         else:
             sys_audio_path = self.audio_path_dict[dial_id][turn_id - 1]["system"]
 
-        print(sys_audio_path, user_audio_path)
         input_values_dict = build_paired_audio(
             system_path=sys_audio_path,
             user_path=user_audio_path,
@@ -234,6 +233,5 @@ if __name__ == "__main__":
                 t.decode(batch["text_input"]["input_ids"][i], skip_special_tokens=True)
             )
             print(t.decode(batch["target"]["input_ids"][i], skip_special_tokens=True))
-            print(batch["user_audio_input"].input_values.size())
         pdb.set_trace()
         break

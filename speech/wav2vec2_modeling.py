@@ -252,20 +252,20 @@ class AudioEncoder(PreTrainedModel):
 
         system_input = input_values_dict["system"]
         system_output = self.wav2vec2_xvector(
-            system_input.input_values,
-            system_input.attention_mask,
-            system_input.output_attentions,
-            system_input.output_hidden_states,
-            system_input.return_dict,
+            system_input.input_values["input_values"],
+            system_input.attention_mask["attention_mask"],
+            system_input.output_attentions["output_attentions"],
+            system_input.output_hidden_states["output_hidden_states"],
+            system_input.return_dict["return_dict"],
         )
 
         user_input = input_values_dict["user"]
         user_output = self.wav2vec2_xvector(
-            user_input.input_values,
-            user_input.attention_mask,
-            user_input.output_attentions,
-            user_input.output_hidden_states,
-            user_input.return_dict,
+            user_input.input_values["input_values"],
+            user_input.attention_mask["attention_mask"],
+            user_input.output_attentions["output_attentions"],
+            user_input.output_hidden_states["output_hidden_states"],
+            user_input.return_dict["return_dict"],
         )
 
         return (system_output, user_output)
@@ -308,7 +308,6 @@ def build_paired_audio(system_path, user_path, processor):
 if __name__ == "__main__":
     device = "cpu"
     config = PretrainedConfig()
-    print(config)
     model = AudioEncoder(config).to(device)
     # model = Wav2Vec2ForXVector.from_pretrained("facebook/wav2vec2-base").to(device)
     processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base")
