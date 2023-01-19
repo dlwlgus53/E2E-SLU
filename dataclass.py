@@ -188,15 +188,19 @@ if __name__ == "__main__":
         "--audio_test_file_list", type=str, default="finalfilelist-dev_all.txt"
     )
     parser.add_argument(
-        "--base_trained",
+        "--text_encoder_model",
         type=str,
         default="sentence-transformers/all-mpnet-base-v2",
         help=" pretrainned model from 🤗",
     )
+    parser.add_argument(
+        "--data_path_prefix",
+        type=str,
+        default="Avoid absolute path",
+    )
 
-    # /home/jihyunlee/woz-data/MultiWOZ_2.1/split0.01/labeled.json
     args = parser.parse_args()
-    text_tokenizer = AutoTokenizer.from_pretrained(args.base_trained)
+    text_tokenizer = AutoTokenizer.from_pretrained(args.text_encoder_model)
     test_dataset = E2Edataclass(
         text_tokenizer,
         args.text_test_data_path,
@@ -219,4 +223,5 @@ if __name__ == "__main__":
             )
             print(t.decode(batch["target"]["input_ids"][i], skip_special_tokens=True))
             print(batch["user_audio_input"].input_values.size())
+        pdb.set_trace()
         break
