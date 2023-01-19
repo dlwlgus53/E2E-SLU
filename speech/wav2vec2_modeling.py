@@ -252,20 +252,20 @@ class AudioEncoder(PreTrainedModel):
 
         system_input = input_values_dict["system"]
         system_output = self.wav2vec2_xvector(
-            system_input.input_values["input_values"],
-            system_input.attention_mask,
-            system_input.output_attentions,
-            system_input.output_hidden_states,
-            system_input.return_dict,
+            system_input.input_values.squeeze(),
+            # system_input.attention_mask,
+            # system_input.output_attentions,
+            # system_input.output_hidden_states,
+            # system_input.return_dict,
         )
 
         user_input = input_values_dict["user"]
         user_output = self.wav2vec2_xvector(
-            user_input.input_values["input_values"],
-            user_input.attention_mask,
-            user_input.output_attentions,
-            user_input.output_hidden_states,
-            user_input.return_dict,
+            user_input.input_values.squeeze(),
+            # user_input.attention_mask,
+            # user_input.output_attentions,
+            # user_input.output_hidden_states,
+            # user_input.return_dict,
         )
 
         return (system_output, user_output)
@@ -318,6 +318,14 @@ if __name__ == "__main__":
         user_path="/home/lee1jun/develop/dev_all/MUL0032/MUL0032-0-user.wav",
         processor=processor,
     )
+
+    input_values_dict = {
+        "system": PairedAudioData(input_values=torch.rand(4, 1, 71147)),
+        "user": PairedAudioData(input_values=torch.rand(4, 1, 61147)),
+    }
+    print("****")
+    print(input_values_dict["system"].input_values.size())
+    print(input_values_dict["user"].input_values.size())
 
     with torch.no_grad():
         outputs = model(input_values_dict)

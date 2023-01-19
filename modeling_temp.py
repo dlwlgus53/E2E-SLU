@@ -71,8 +71,8 @@ class TextEncoder(nn.Module):
 
     def forward(self, text_data):
         input_ids, attention_mask = (
-            text_data["input_ids"].cuda(),
-            text_data["attention_mask"].cuda(),
+            text_data["input_ids"].to(device),
+            text_data["attention_mask"].to(device),
         )
         embeded = self.get_mean_embeddings(input_ids, attention_mask)
         return embeded
@@ -101,9 +101,9 @@ class TransformerModel(nn.Module):
     ):
         super().__init__()
         self.model_type = "Transformer"
-        self.TextEncoder = TextEncoder(text_encoder).cuda()
+        self.TextEncoder = TextEncoder(text_encoder).to(device)
         config = PretrainedConfig()
-        self.AudioEncoder = AudioEncoder(config).cuda()
+        self.AudioEncoder = AudioEncoder(config).to(device)
         self.pos_encoder = PositionalEncoding(d_model, dropout)
         encoder_layers = TransformerEncoderLayer(d_model, nhead, d_hid, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
@@ -122,11 +122,10 @@ class TransformerModel(nn.Module):
 
         text_src = self.TextEncoder(batch["text_input"])  # B x H(768)
         audio_data = {
-            "user": batch["user_audio_input"],
-            "system": batch["system_audio_input"],
+            "user": batch["user_audio_input"].input_values.to(device),
+            "system": batch["system_audio_input"].input_values.to(device),
         }
         audio_src = self.AudioEncoder(audio_data)
-        pdb.set_trace()
 
         # src = text_src + audio_src
         # output = self.transformer_encoder(src, src_mask)
@@ -156,6 +155,8 @@ def generate_square_subsequent_mask(sz: int) -> Tensor:
 # test_data = data_process(test_iter)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"🍪 DEVICE: {device}")
+# device = "cpu"
 
 
 def batchify(data: Tensor, bsz: int) -> Tensor:
@@ -193,6 +194,8 @@ def train(model: nn.Module) -> None:
 
     for i, batch in enumerate(test_data_loader):
 
+        # print("###")
+        # print(batch["system_audio_input"].input_values.input_values.size())
         output = model(batch)
         loss = criterion(output.view(-1, ntokens), batch["target"])
 
@@ -265,7 +268,7 @@ if __name__ == "__main__":
     )
 
     test_data_loader = torch.utils.data.DataLoader(
-        dataset=test_dataset, batch_size=1, collate_fn=test_dataset.collate_fn
+        dataset=test_dataset, batch_size=4, collate_fn=test_dataset.collate_fn
     )
 
     best_val_loss = float("inf")
