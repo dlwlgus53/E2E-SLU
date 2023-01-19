@@ -20,7 +20,8 @@ from collections import defaultdict
 import ontology
 import os
 from transformers import AutoModel, AutoTokenizer, AutoConfig, Wav2Vec2Processor
-from speech.wav2vec2_modeling import build_paired_audio
+from speech.wav2vec2_modeling import build_paired_audio, PairedAudioData
+
 
 # logging.set_verbosity_error()
 
@@ -152,6 +153,7 @@ class E2Edataclass:
         sys_input_features = [
             {"input_values": feature.input_values} for feature in sys_audio
         ]
+
         user_input_features = [
             {"input_values": feature.input_values} for feature in user_audio
         ]
@@ -162,12 +164,20 @@ class E2Edataclass:
             pad_to_multiple_of=None,
             return_tensors="pt",
         )
+
+        # It it necessary?
+        # if "attention_mask" in batch:
+        #     system_audio_attention_mask = batch["attention_mask"].to(torch.long)
+
         user_audio_input = self.processor.pad(
             user_input_features,
             padding="longest",
             pad_to_multiple_of=None,
             return_tensors="pt",
         )
+
+        user_audio_input = PairedAudioData(input_values=user_audio_input)
+        system_audio_input = PairedAudioData(input_values=system_audio_input)
 
         return {
             "text_input": question,
@@ -206,13 +216,15 @@ if __name__ == "__main__":
     )
 
     test_data_loader = torch.utils.data.DataLoader(
-        dataset=test_dataset, batch_size=4, collate_fn=test_dataset.collate_fn
+        dataset=test_dataset, batch_size=16, collate_fn=test_dataset.collate_fn
     )
 
     t = test_dataset.text_tokenizer
 
     for batch in test_data_loader:
-        print(batch)
+        print(batch.keys())
+
+        print(batch["system_audio_input"].input_values)
         for i in range(3):
             print(
                 t.decode(batch["text_input"]["input_ids"][i], skip_special_tokens=True)
