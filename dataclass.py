@@ -75,12 +75,13 @@ class E2Edataclass:
             dial_num += 1
             dial = dataset[d_id]
             for t_id, turn in enumerate(dial["log"]):
-                for key in ontology.QA["all-domain"]:
+                for key in ontology.QA["all-domain"][:2]:
                     q = ontology.QA[key]["description1"]
                     if key in turn["belief"]:
                         a = turn["belief"][key]
                     else:
                         a = ontology.QA["NOT_MENTIONED"]
+                    a = key  # TODO for debugging will remove
 
                     question.append(q)
                     target.append(a)
@@ -148,7 +149,6 @@ class E2Edataclass:
             truncation=True,
         )
 
-        # TODO : encode user and system seperately
         sys_input_features = [
             {"input_values": feature.input_values} for feature in sys_audio
         ]
@@ -157,26 +157,30 @@ class E2Edataclass:
             {"input_values": feature.input_values} for feature in user_audio
         ]
 
-        system_audio_input = self.processor.pad(
+        processed_system_audio = self.processor.pad(
             sys_input_features,
             padding="longest",
             pad_to_multiple_of=None,
             return_tensors="pt",
+            return_attention_mask=True,
         )
 
-        # It it necessary?
-        # if "attention_mask" in batch:
-        #     system_audio_attention_mask = batch["attention_mask"].to(torch.long)
-
-        user_audio_input = self.processor.pad(
+        processed_user_audio = self.processor.pad(
             user_input_features,
             padding="longest",
             pad_to_multiple_of=None,
             return_tensors="pt",
+            return_attention_mask=True,
         )
 
-        user_audio_input = PairedAudioData(input_values=user_audio_input)
-        system_audio_input = PairedAudioData(input_values=system_audio_input)
+        system_audio_input = PairedAudioData(
+            input_values=processed_system_audio["input_values"],
+            attention_mask=processed_system_audio["attention_mask"],
+        )
+        user_audio_input = PairedAudioData(
+            input_values=processed_user_audio["input_values"],
+            attention_mask=processed_user_audio["attention_mask"],
+        )
 
         return {
             "text_input": question,
@@ -199,7 +203,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--text_encoder_model",
         type=str,
-        default="sentence-transformers/all-mpnet-base-v2",
+        default="bert-base-uncased",
         help=" pretrainned model from 🤗",
     )
     parser.add_argument(

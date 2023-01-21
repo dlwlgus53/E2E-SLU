@@ -73,10 +73,12 @@ class TDNNLayer(nn.Module):
 
 
 class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
-    def __init__(self, config):
+    def __init__(self, config, output_dim):
         super().__init__(config)
-
+        if output_dim != None:
+            config.xvector_output_dim = output_dim
         self.wav2vec2 = Wav2Vec2Model(config)
+
         num_layers = (
             config.num_hidden_layers + 1
         )  # transformer layers + input embeddings
@@ -210,10 +212,10 @@ class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
             mean_features = torch.stack(mean_features)
             std_features = torch.stack(std_features)
 
-        # print("statistic")
-        # print(hidden_states.size())
-        # print(mean_features.size())
-        # print(std_features.size())
+            # print("statistic")
+            # print(hidden_states.size())
+            # print(mean_features.size())
+            # print(std_features.size())
         statistic_pooling = torch.cat([mean_features, std_features], dim=-1)
         # print(statistic_pooling.size())
 
@@ -242,18 +244,17 @@ class Wav2Vec2ForXVector(Wav2Vec2PreTrainedModel):
 class AudioEncoder(PreTrainedModel):
 
     # Is __init__ called even after PreTrainedModel.from_pretrained?
-    def __init__(self, config: PretrainedConfig, *inputs, **kwargs):
+    def __init__(self, config: PretrainedConfig, output_dim=None, *inputs, **kwargs):
         super().__init__(config, *inputs, **kwargs)
         self.wav2vec2_xvector = Wav2Vec2ForXVector.from_pretrained(
-            "facebook/wav2vec2-base"
+            "facebook/wav2vec2-base", output_dim
         )
 
     def forward(self, input_values_dict):
-
         system_input = input_values_dict["system"]
         system_output = self.wav2vec2_xvector(
             system_input.input_values.squeeze(),
-            # system_input.attention_mask,
+            system_input.attention_mask,
             # system_input.output_attentions,
             # system_input.output_hidden_states,
             # system_input.return_dict,
@@ -262,7 +263,7 @@ class AudioEncoder(PreTrainedModel):
         user_input = input_values_dict["user"]
         user_output = self.wav2vec2_xvector(
             user_input.input_values.squeeze(),
-            # user_input.attention_mask,
+            user_input.attention_mask,
             # user_input.output_attentions,
             # user_input.output_hidden_states,
             # user_input.return_dict,
@@ -298,8 +299,7 @@ def build_paired_audio(system_path, user_path, processor):
             speech,
             sampling_rate=16000,
             return_tensors="pt",
-        ).input_values
-
+        ).input_values[0]
         input_values_dict[key] = PairedAudioData(input_values=input_values)
 
     return input_values_dict
