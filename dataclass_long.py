@@ -1,3 +1,6 @@
+# This is longer version of dataclass
+# Not use this version
+
 import re
 import pdb
 import json
@@ -14,7 +17,9 @@ import ontology
 import os
 from transformers import AutoModel, AutoTokenizer, AutoConfig, Wav2Vec2Processor
 from speech.wav2vec2_modeling import build_paired_audio, PairedAudioData
-from collections import defaultdict
+
+
+# logging.set_verbosity_error()
 
 
 class E2Edataclass:
@@ -55,39 +60,6 @@ class E2Edataclass:
             path_dict[d_id][t_id][type_US] = line.split("|")[0]
         return path_dict
 
-    def make_bspn(self, dict_bspn):
-        ans = []
-        for domain_slot in ontology.QA["all_domain"]:
-            if domain_slot in dict_bspn:
-                domain, slot = domain_slot.split("-")[0], domain_slot.split("-")[1]
-                domain = domain.strip()
-                if (f"domain : {domain}") not in ans:
-                    ans.append(f"domain : {domain}")
-                ans.append(f"{cfg.SLOT_tk}{slot}")
-                ans.append(f" {dict_bspn[domain_slot]}")
-
-        ans = "".join(ans)
-        return ans
-
-    def bspn_to_dict(self, str_bspn):
-        if str_bspn == "":
-            return {}
-
-        belief_dict = {}
-        splits = str_bspn.split(cfg.DOMAIN_tk)[1:]
-        try:
-            for chunck in splits:
-                ch = chunck.split(cfg.SLOT_tk)
-                domain = ch[0]
-                for idx, slot_value in enumerate(ch[1:]):
-                    slot = slot_value.split(" ")[0]
-                    value = " ".join(slot_value.split(" ")[1:])
-
-                    belief_dict[f"{domain}-{slot}"] = value.strip()
-        except:
-            pdb.set_trace()
-        return belief_dict
-
     def raw_data_to_list(self, dataset):
         dial_id, turn_id, question, target = [], [], [], []
         dial_num = 0
@@ -99,14 +71,18 @@ class E2Edataclass:
             dial_num += 1
             dial = dataset[d_id]
             for t_id, turn in enumerate(dial["log"]):
-                q = "What is the belief state of this dialouge"
-                a = self.make_bspn(turn["curr_belief"])
-                if turn["curr_belief"] != self.bspn_to_dict(a):
-                    pdb.set_trace()
-                question.append(q)
-                target.append(a)
-                dial_id.append(d_id)
-                turn_id.append(t_id)
+                for key in ontology.QA["all-domain"][:2]:
+                    q = ontology.QA[key]["description1"]
+                    if key in turn["belief"]:
+                        a = turn["belief"][key]
+                    else:
+                        a = ontology.QA["NOT_MENTIONED"]
+                    a = key  # TODO for debugging will remove
+
+                    question.append(q)
+                    target.append(a)
+                    dial_id.append(d_id)
+                    turn_id.append(t_id)
 
         print(f"total dial num is {dial_num}")
         return dial_id, turn_id, question, target
@@ -215,9 +191,7 @@ class E2Edataclass:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--text_test_data_path",
-        type=str,
-        default="./woz_data/dev_data.json",  # train 으로 테스트 안해봄
+        "--text_test_data_path", type=str, default="./woz_data/dev_data.json"
     )
     parser.add_argument(
         "--audio_test_file_list", type=str, default="finalfilelist-dev_all.txt"
@@ -251,7 +225,6 @@ if __name__ == "__main__":
     t = test_dataset.text_tokenizer
 
     for batch in test_data_loader:
-        pass
         print(batch.keys())
 
         print(batch["system_audio_input"].input_values)
@@ -260,5 +233,5 @@ if __name__ == "__main__":
                 t.decode(batch["text_input"]["input_ids"][i], skip_special_tokens=True)
             )
             print(t.decode(batch["target"]["input_ids"][i], skip_special_tokens=True))
-
         pdb.set_trace()
+        break
