@@ -71,13 +71,13 @@ class E2Edataclass:
             dial_num += 1
             dial = dataset[d_id]
             for t_id, turn in enumerate(dial["log"]):
-                for key in ontology.QA["all-domain"][:2]:
+                for key in ontology.QA["all_domain"]:
                     q = ontology.QA[key]["description1"]
+                    q += turn["user"]
                     if key in turn["belief"]:
                         a = turn["belief"][key]
                     else:
                         a = ontology.QA["NOT_MENTIONED"]
-                    a = key  # TODO for debugging will remove
 
                     question.append(q)
                     target.append(a)
@@ -180,7 +180,7 @@ class E2Edataclass:
 
         return {
             "text_input": question,
-            "target": target,
+            "label": target,
             "turn_id": turn_id,
             "dial_id": dial_id,
             "user_audio_input": user_audio_input,

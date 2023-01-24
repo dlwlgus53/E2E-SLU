@@ -5,6 +5,9 @@ out/
 *data/
 *swp
 *txt
+runs/
+logs/
+model/
 !configs/*.json
 !woz_data/*.py
 output/

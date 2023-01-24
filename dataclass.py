@@ -23,6 +23,7 @@ class E2Edataclass:
     ):
         self.text_tokenizer = text_tokenizer
         self.text_max_length = text_tokenizer.model_max_length
+        self.data_path = text_data_path
         raw_text_dataset = json.load(open(text_data_path, "r"))
         self.data_type = data_type
         self.short = short
@@ -96,7 +97,7 @@ class E2Edataclass:
         S = 0
         for d_id in dataset.keys():
             S += 1
-            if self.short == True and S > 100:
+            if self.short == True and S > 5:
                 break
             dial_num += 1
             dial = dataset[d_id]

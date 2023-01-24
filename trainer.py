@@ -1,28 +1,39 @@
 import os
 import torch
-import pdb 
+import pdb
 import json
 import logging
 import ontology
-from utils import*
 from logger_conf import CreateLogger
 from collections import defaultdict
-from torch.utils.tensorboard import SummaryWriter
-from utils import make_label_key
 from collections import OrderedDict
-
+import copy
 from transformers import AutoModel
 
 # from utils import save_pickle
-class mwozTrainer:
-    def __init__(self,model, train_batch_size, test_batch_size, tokenizer, optimizer, log_folder, save_prefix, max_epoch, logger_name, evaluate_fnc, belief_type, \
-    train_data = None, valid_data = None,  test_data = None, patient = 3):
+class Trainer:
+    def __init__(
+        self,
+        model,
+        train_batch_size,
+        test_batch_size,
+        tokenizer,
+        optimizer,
+        log_folder,
+        save_prefix,
+        max_epoch,
+        logger_name,
+        evaluate_fnc,
+        train_data=None,
+        valid_data=None,
+        test_data=None,
+        patient=3,
+    ):
         self.log_folder = log_folder
         self.tokenizer = tokenizer
         self.optimizer = optimizer
-        self.writer = SummaryWriter()
-        self.logger = CreateLogger(logger_name, os.path.join(log_folder,'info.log'))
-        self.save_prefix =save_prefix
+        self.logger = CreateLogger(logger_name, os.path.join(log_folder, "info.log"))
+        self.save_prefix = save_prefix
         self.train_data = train_data
         self.valid_data = valid_data
         self.test_data = test_data
@@ -32,205 +43,223 @@ class mwozTrainer:
         self.test_batch_size = test_batch_size
         self.patient = patient
         self.evaluate_fnc = evaluate_fnc
-        self.belief_type= belief_type
-        self.test_result_dict = {}
-        os.makedirs(f"model/{self.save_prefix}",  exist_ok=True)
+        os.makedirs(f"model/{self.save_prefix}", exist_ok=True)
 
-    def work(self, train_data = None, test = False, train = True, save = False, model_path = None) :
+    def work(
+        self, train_data=None, test=False, train=True, save=False, model_path=None
+    ):
 
         if train == False and model_path == None:
             self.logger.error("train is False and model_path is NOne")
-        if train_data: self.train_data = train_data
-        min_loss = float('inf')
-        best_model = ''        
+        if train_data:
+            self.train_data = train_data
+        min_loss = float("inf")
+        best_model = ""
 
         if train:
             try_ = 0
             for epoch in range(self.max_epoch):
-                try_ +=1
+                try_ += 1
                 self.train(epoch)
                 loss = self.valid(epoch)
                 if loss < min_loss:
-                    try_ =0
+                    try_ = 0
                     min_loss = loss
-                    best_model = self.model # deep copy 
+                    best_model = copy.deepcopy(self.model)  # deep copy
 
                 if try_ > self.patient:
                     self.logger.info(f"Early stop in Epoch {epoch}")
                     break
 
-            self.model = best_model
+            self.model = copy.deepcopy(best_model)
             if save == True:
-                torch.save(self.model.state_dict(), f"model/{self.save_prefix}/epoch_{epoch}_loss_{min_loss:.4f}.pt")
+                torch.save(
+                    self.model.state_dict(),
+                    f"model/{self.save_prefix}/epoch_{epoch}_loss_{min_loss:.4f}.pt",
+                )
 
-        
         if test == True:
-            if self.belief_type:
-                gold, pred = self.belief_test() 
-            else :
-                gold, pred = self.test()
+            # if self.belief_type:
+            #     gold, pred = self.belief_test()
+            # else:
+            gold, pred, pred_dict = self.test()
+            self.save_test_result(
+                pred_dict, self.test_data.data_path, f"out/{self.save_prefix}"
+            )
+            return 1
 
-            test_score = self.evaluate_fnc(gold, pred)
-            self.logger.info(f"Test score : {test_score}")
-            return test_score
-
-    def set_model(self,model):
+    def set_model(self, model):
         self.model = model
-    
+
     def get_model(self):
-        return self.model 
+        return self.model
 
     def init_model(self, base_model):
         self.model = AutoModel.from_pretrained(base_model, return_dict=True)
 
-    def make_label(self, data):
-        generated_label = []
-        max_iter = int(len(data) / self.test_batch_size)
-        loader = torch.utils.data.DataLoader(dataset=data, batch_size=self.test_batch_size,\
-            collate_fn=data.collate_fn)
-
-        self.model.eval()
-        self.logger.info("Labeling Start")
-
-        with torch.no_grad():
-            for iter,batch in enumerate(loader):
-                # make_label_key(dial_id, turn_id, slot)
-                outputs_text = self.model.module.generate(input_ids=batch['input']['input_ids'].to('cuda'))
-                outputs_text =self.tokenizer.batch_decode(outputs_text, skip_special_tokens = True)
-                for idx in range(len(outputs_text)):
-                    dial_id = batch['dial_id'][idx]
-                    turn_id = batch['turn_id'][idx]
-                    pseudo = batch['pseudo'][idx]
-                    label_key = make_label_key(dial_id, turn_id)
-                    pred = outputs_text[idx]
-                    if pred == 'true' or pseudo == 0:
-                        generated_label.append(label_key)
-
-                if (iter + 1) % 50 == 0:
-                    self.logger.info(f"Labeling : {iter+1}/{max_iter}")
-        return  generated_label 
-        
-    def train(self,epoch_num):
+    def train(self, epoch_num):
         train_max_iter = int(len(self.train_data) / self.train_batch_size)
-        train_loader = torch.utils.data.DataLoader(dataset=self.train_data, batch_size=self.train_batch_size,\
-            collate_fn=self.train_data.collate_fn)
+        train_loader = torch.utils.data.DataLoader(
+            dataset=self.train_data,
+            batch_size=self.train_batch_size,
+            collate_fn=self.train_data.collate_fn,
+        )
 
-        loss_sum =0 
+        loss_sum = 0
         self.model.train()
 
         for iter, batch in enumerate(train_loader):
             self.optimizer.zero_grad()
-            input_ids = batch['input']['input_ids'].to('cuda')
-            labels = batch['label']['input_ids'].to('cuda')
-            outputs = self.model(input_ids=input_ids, labels=labels)
-            
-            loss =outputs.loss.mean()
+            outputs = self.model(batch)
+            loss = outputs.loss.mean()
             loss.backward()
             self.optimizer.step()
-            loss_sum += loss.detach()
-        
-            if (iter + 1) % 50 == 0:
-                self.logger.info(f"Epoch {epoch_num} training : {iter+1}/{train_max_iter } loss : {loss_sum/50:.4f}")
-                outputs_text = self.model.module.generate(input_ids=input_ids)
-                self.writer.add_scalar(f'Loss/train_epoch{epoch_num} ', loss_sum/50, iter)
-                loss_sum =0 
+            loss_sum += loss.detach().item()
 
-                if (iter+1) % 150 ==0:
-                    predict_text = self.tokenizer.batch_decode(outputs_text, skip_special_tokens = True)
-                    answer_text = self.tokenizer.batch_decode(batch['label']['input_ids'], skip_special_tokens = True)
-                    p_a_text = [f'ans : {a} pred : {p} ||' for (a,p) in zip(answer_text[:10], predict_text[:10])]
-                    self.logger.info(f'{p_a_text}')
-                    self.writer.add_text(f'Answer/train_epoch{epoch_num}',\
-                    '\n'.join(p_a_text),iter)
+            if (iter + 1) % 10 == 0:
+                self.logger.info(
+                    f"Epoch {epoch_num} training : {iter+1}/{train_max_iter } loss : {loss_sum/50:.4f}"
+                )
+                outputs_idx = torch.argmax(outputs.logits, 2)
+                loss_sum = 0
+
+                if (iter + 1) % 10 == 0:
+                    predict_text = self.tokenizer.batch_decode(
+                        outputs_idx, skip_special_tokens=True
+                    )
+
+                    batch["label"]["input_ids"][
+                        batch["label"]["input_ids"] == -100
+                    ] = self.tokenizer.pad_token_id
+                    answer_text = self.tokenizer.batch_decode(
+                        batch["label"]["input_ids"], skip_special_tokens=True
+                    )
+                    self.logger.info(f"ans  : {answer_text[0]}")
+                    self.logger.info(f"pred : {predict_text[0]}")
 
                     # question_text = tokenizer.batch_decode(batch['input']['input_ids'], skip_special_tokens = True)
-                    # writer.add_text(f'Question/train_epoch{epoch_num}',\
                     # '\n'.join(question_text),iter)
 
-
-    def valid(self,epoch_num):
+    def valid(self, epoch_num):
         valid_max_iter = int(len(self.valid_data) / self.test_batch_size)
-        valid_loader = torch.utils.data.DataLoader(dataset=self.valid_data, batch_size=self.test_batch_size,\
-            collate_fn=self.valid_data.collate_fn)
+        valid_loader = torch.utils.data.DataLoader(
+            dataset=self.valid_data,
+            batch_size=self.test_batch_size,
+            collate_fn=self.valid_data.collate_fn,
+        )
         self.model.eval()
         loss_sum = 0
         self.logger.info("Validation Start")
         with torch.no_grad():
             for iter, batch in enumerate(valid_loader):
-                input_ids = batch['input']['input_ids'].to('cuda')
-                labels = batch['label']['input_ids'].to('cuda')
-                outputs = self.model(input_ids=input_ids, labels=labels)
-                loss =outputs.loss.mean()
-                
+                outputs = self.model(batch)
+                loss = outputs.loss.mean()
+
                 loss_sum += loss.detach()
                 if (iter + 1) % 50 == 0:
-                    self.logger.info(f"Epoch {epoch_num} Validation : {iter+1}/{valid_max_iter}")
+                    self.logger.info(
+                        f"Epoch {epoch_num} Validation : {iter+1}/{valid_max_iter}"
+                    )
 
-        self.writer.add_scalar(f'Loss/valid ', loss_sum/iter, epoch_num)
         self.logger.info(f"Epoch {epoch_num} Validation loss : {loss_sum/iter:.4f}")
-        return  loss_sum/iter
+        return loss_sum / iter
 
     def test(self):
         answer, pred = [], []
+        pred_dict = defaultdict(dict)
         test_max_iter = int(len(self.test_data) / self.test_batch_size)
-        test_loader = torch.utils.data.DataLoader(dataset=self.test_data, batch_size=self.test_batch_size,\
-            collate_fn=self.test_data.collate_fn)
-        result_dict= defaultdict(lambda : defaultdict(dict))# dial_id, # turn_id # schema
+        test_loader = torch.utils.data.DataLoader(
+            dataset=self.test_data,
+            batch_size=self.test_batch_size,
+            collate_fn=self.test_data.collate_fn,
+        )
+        result_dict = defaultdict(
+            lambda: defaultdict(dict)
+        )  # dial_id, # turn_id # schema
         self.model.eval()
         loss_sum = 0
         self.logger.info("Test start")
         with torch.no_grad():
-            for iter,batch in enumerate(test_loader):
-                input_text = self.tokenizer.batch_decode(batch['input']['input_ids'], skip_special_tokens = True)
-                outputs_text = self.model.module.generate(input_ids=batch['input']['input_ids'].to('cuda'))
-                outputs_text =self.tokenizer.batch_decode(outputs_text, skip_special_tokens = True)
-                label =self.tokenizer.batch_decode(batch['label']['input_ids'], skip_special_tokens = True)
-                pred.extend(outputs_text)
-                answer.extend(label)
+            for iter, batch in enumerate(test_loader):
+                if iter % 10 == 0:
+                    self.logger.info(f"Test... {iter+1}/{test_max_iter}")
+                outputs = self.model(batch)
+                outputs_idx = torch.argmax(outputs.logits, 2)
 
-                for idx in range(len(outputs_text)):
-                    outputs_text[idx]
+                predict_text = self.tokenizer.batch_decode(
+                    outputs_idx, skip_special_tokens=True
+                )
+                batch["label"]["input_ids"][
+                    batch["label"]["input_ids"] == -100
+                ] = self.tokenizer.pad_token_id
+                answer_text = self.tokenizer.batch_decode(
+                    batch["label"]["input_ids"], skip_special_tokens=True
+                )
 
-                for d_id, t_id, b, a, p in zip(batch['dial_id'],batch['turn_id'], batch['belief'],label, outputs_text):
-                    if a == 'false':
-                        result_dict[d_id][t_id]['neg'] = {'belief' : b, 'ans' :a,'pred' : p}
-                    else:
-                        result_dict[d_id][t_id]['org'] = {'belief' : b, 'ans' :a,'pred' : p}
+                pred.extend(predict_text)
+                answer.extend(answer_text)
+                for d, t, p in zip(batch["dial_id"], batch["turn_id"], predict_text):
+                    pred_dict[d][t] = p
 
-        self.test_result_dict = result_dict
-        return answer, pred
-    
+        pred_dict = dict(pred_dict)
+        return answer, pred, pred_dict
+
     def string_to_dict(slef, belief_str):
         belief_dict = {}
         items = belief_str.split(",")
         for item in items:
             try:
-                key,value = item.split(": ")
+                key, value = item.split(": ")
                 belief_dict[key.strip()] = value.strip()
             except ValueError:
                 continue
         return belief_dict
 
+    def save_test_result(self, result_dict, test_data_path, save_path):
+
+        test_dataset = json.load(open(test_data_path, "r"))
+
+        for d_id in test_dataset.keys():
+            dial = test_dataset[d_id]["log"]
+            for turn in dial:
+                t_id = int(turn["turn_num"])
+                try:
+                    turn.update({"pred": result_dict[d_id][t_id]})
+                except:
+                    pass
+
+        with open(save_path, "w") as f:
+            json.dump(test_dataset, f, ensure_ascii=False, indent=4)
+
     def belief_test(self):
         test_max_iter = int(len(self.test_data) / self.test_batch_size)
-        test_loader = torch.utils.data.DataLoader(dataset=self.test_data, batch_size=self.test_batch_size,\
-            collate_fn=self.test_data.collate_fn)
+        test_loader = torch.utils.data.DataLoader(
+            dataset=self.test_data,
+            batch_size=self.test_batch_size,
+            collate_fn=self.test_data.collate_fn,
+        )
 
-        belief_state= defaultdict(lambda : defaultdict(dict))# dial_id, # turn_id # schema
+        belief_state = defaultdict(
+            lambda: defaultdict(dict)
+        )  # dial_id, # turn_id # schema
         self.model.eval()
         loss_sum = 0
         self.logger.info("Test start")
         with torch.no_grad():
-            for iter,batch in enumerate(test_loader):
-                outputs_text = self.model.module.generate(input_ids=batch['input']['input_ids'].to('cuda'))
-                outputs_text =self.tokenizer.batch_decode(outputs_text, skip_special_tokens = True)
+            for iter, batch in enumerate(test_loader):
+                outputs_text = self.model.module.generate(
+                    input_ids=batch["input"]["input_ids"].to("cuda")
+                )
+                outputs_text = self.tokenizer.batch_decode(
+                    outputs_text, skip_special_tokens=True
+                )
                 for idx in range(len(outputs_text)):
-                    dial_id = batch['dial_id'][idx]
-                    turn_id = batch['turn_id'][idx]
-                    belief_state[dial_id][turn_id]= self.string_to_dict(outputs_text[idx])
+                    dial_id = batch["dial_id"][idx]
+                    turn_id = batch["turn_id"][idx]
+                    belief_state[dial_id][turn_id] = self.string_to_dict(
+                        outputs_text[idx]
+                    )
                 if (iter + 1) % 50 == 0:
-                    self.logger.info(f"Test : {iter+1}/{test_max_iter}")
+                    self.logger.info(f"Test : {iter}/{test_max_iter}")
         answer = self.test_data.get_data()
         return answer, belief_state
-    
-
