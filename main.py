@@ -26,39 +26,31 @@ from model import Our_Transformer
 parser = argparse.ArgumentParser()
 
 # data setting
-parser.add_argument("--audio_data_path", type=str)
-parser.add_argument("--valid_data_path", type=str)
-parser.add_argument("--test_data_path", type=str)
-parser.add_argument("--use_list_path", type=str)
 
-parser.add_argument(
-    "--text_test_data_path", type=str, default="./woz_data/dev_data.json"
-)
-parser.add_argument(
-    "--audio_test_file_list", type=str, default="finalfilelist-dev_all.txt"
-)
-parser.add_argument(
-    "--text_encoder_model",
-    type=str,
-    default="bert-base-uncased",
-    help=" pretrainned model from 🤗 for text",
-)
+
+parser.add_argument("--text_train_path", type=str, default="./woz_data/train_data.json")
+parser.add_argument("--text_dev_path", type=str, default="./woz_data/dev_data.json")
+parser.add_argument("--text_test_path", type=str, default="./woz_data/test_data.json")
+parser.add_argument("--audio_train_list", type=str)
+parser.add_argument("--audio_dev_list", type=str)
+parser.add_argument("--audio_test_list", type=str)
 
 # training setting
 parser.add_argument("--short", type=int, default=0)
 parser.add_argument("--seed", type=int, default=1)
 parser.add_argument("--max_epoch", type=int, default=1)
 parser.add_argument("--gpus", default=1, type=int, help="number of gpus per node")
-parser.add_argument(
-    "--save_prefix", type=str, help="prefix for all savings", default=""
-)
+parser.add_argument("--save_prefix", type=str, default="")
 parser.add_argument("--patient", type=int, help="prefix for all savings", default=3)
 
 # model parameter
-
 parser.add_argument("--batch_size_per_gpu", type=int, default=16)
 parser.add_argument("--test_batch_size_per_gpu", type=int, default=16)
 parser.add_argument("--use_fine_trained", type=str)
+parser.add_argument("--model_config", type=str, default="./configs/transformer.json")
+parser.add_argument("--text_encoder_freeze", type=int, defulat=0)
+parser.add_argument("--audio_encoder_freeze", type=int, default=0)
+parser.add_argument("--text_encoder_model", type=str, default="bert-base-uncased")
 
 
 def init_experiment(seed):
@@ -103,29 +95,45 @@ if __name__ == "__main__":
 
     model = Our_Transformer(
         d_model=768,
-        text_encoder="bert-base-uncased",
-        transformer_config=AutoConfig.from_pretrained("./configs/transformer.json"),
+        text_encoder=args.text_encoder_model,
+        transformer_config=AutoConfig.from_pretrained(args.model_config),
         device=device,
     ).to(device)
 
-    # Freezing backbone and FPN
-    model.TextEncoder.requires_grad_(False)
-    # model.AudioEncoder.requires_grad_()
+    # Freezing #  TODO as option?
+    if args.text_encoder_freeze:
+        model.TextEncoder.requires_grad_(False)
+    if args.audio_encoder_freeze:
+        model.AudioEncoder.requires_grad_(False)
 
     if args.use_fine_trained:
-        teacher = load_trained(model, args.fine_trained)
+        model = load_trained(model, args.fine_trained)
 
     if args.gpus > 1:
         model = nn.DataParallel(model)
 
     text_tokenizer = AutoTokenizer.from_pretrained(args.text_encoder_model)
+    train_dataset = E2Edataclass(
+        text_tokenizer,
+        args.text_train_path,
+        args.audio_train_list,
+        "train",
+        short=args.short,
+    )
+    dev_dataset = E2Edataclass(
+        text_tokenizer,
+        args.text_dev_path,
+        args.audio_dev_list,
+        "dev",
+        short=args.short,
+    )
 
     test_dataset = E2Edataclass(
         text_tokenizer,
-        args.text_test_data_path,
-        args.audio_test_file_list,
+        args.text_test_path,
+        args.audio_test_list,
         "test",
-        short=0,
+        short=args.short,
     )
 
     test_data_loader = torch.utils.data.DataLoader(
@@ -142,7 +150,6 @@ if __name__ == "__main__":
         "relative_step": True,
         "scale_parameter": False,
     }
-    # "lr": 1e-3,
 
     optimizer = Adafactor(model.parameters(), **optimizer_setting)
 
@@ -157,8 +164,8 @@ if __name__ == "__main__":
 
     model_trainer = Trainer(
         model=model,
-        train_data=test_dataset,
-        valid_data=test_dataset,
+        train_data=train_dataset,
+        valid_data=dev_dataset,
         test_data=test_dataset,
         optimizer=optimizer,
         logger_name="model",
