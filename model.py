@@ -57,9 +57,8 @@ class TextEncoder(nn.Module):
         #     attention_mask, dim=1
         # ) # B x H(768)
         # out = self.fc1(bert_output[0])  # B x H(512)
-
         return {
-            "embedding": bert_output.pooler_output,
+            "embedding": bert_output.last_hidden_state,
             "attention_mask": attention_mask,
         }
 
@@ -113,7 +112,7 @@ class Our_Transformer(nn.Module):
 
         src = torch.cat(
             [
-                text_src["embedding"].unsqueeze(1),
+                text_src["embedding"],
                 sys_audio_src["embeddings"].unsqueeze(1),
                 user_audio_src["embeddings"].unsqueeze(1),
             ],
@@ -121,14 +120,14 @@ class Our_Transformer(nn.Module):
         )  # B x L x H
         import pdb
 
-        # text_attention_mask = text_src["attention_mask"].unsqueeze(1)
-        # mask = torch.cat(
-        #     [
-        #         text_attention_mask,
-        #         torch.ones([len(text_attention_mask), 2]).to(self.device),
-        #     ],
-        #     axis=1,
-        # )
+        text_attention_mask = text_src["attention_mask"]
+        mask = torch.cat(
+            [
+                text_attention_mask,
+                torch.ones([len(text_attention_mask), 2]).to(self.device),
+            ],
+            axis=1,
+        )
 
         batch["label"]["input_ids"] = [
             [
@@ -139,8 +138,14 @@ class Our_Transformer(nn.Module):
         ]
 
         batch["label"]["input_ids"] = torch.tensor(batch["label"]["input_ids"])
+        # output = self.transformer(
+        #     inputs_embeds=src,  # add audio
+        #     labels=batch["label"]["input_ids"].to(self.device),
+        # )
+
         output = self.transformer(
             inputs_embeds=src,  # add audio
+            attention_mask=mask,  # add audio
             labels=batch["label"]["input_ids"].to(self.device),
         )
         # attention_mask=mask,  # add attention

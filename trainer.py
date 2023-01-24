@@ -19,6 +19,7 @@ class Trainer:
         test_batch_size,
         tokenizer,
         optimizer,
+        scheduler,
         log_folder,
         save_prefix,
         max_epoch,
@@ -32,6 +33,7 @@ class Trainer:
         self.log_folder = log_folder
         self.tokenizer = tokenizer
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.logger = CreateLogger(logger_name, os.path.join(log_folder, "info.log"))
         self.save_prefix = save_prefix
         self.train_data = train_data
@@ -114,16 +116,18 @@ class Trainer:
             loss = outputs.loss.mean()
             loss.backward()
             self.optimizer.step()
+            self.scheduler.step()
             loss_sum += loss.detach().item()
-
             if (iter + 1) % 10 == 0:
+                self.logger.info(self.optimizer.param_groups[0]["lr"])
+
                 self.logger.info(
                     f"Epoch {epoch_num} training : {iter+1}/{train_max_iter } loss : {loss_sum/50:.4f}"
                 )
                 outputs_idx = torch.argmax(outputs.logits, 2)
                 loss_sum = 0
 
-                if (iter + 1) % 10 == 0:
+                if (iter + 1) % 50 == 0:
                     predict_text = self.tokenizer.batch_decode(
                         outputs_idx, skip_special_tokens=True
                     )
@@ -134,8 +138,8 @@ class Trainer:
                     answer_text = self.tokenizer.batch_decode(
                         batch["label"]["input_ids"], skip_special_tokens=True
                     )
-                    self.logger.info(f"ans  : {answer_text[0]}")
-                    self.logger.info(f"pred : {predict_text[0]}")
+                    self.logger.info(f"ans  : {answer_text[:]}")
+                    self.logger.info(f"pred : {predict_text[:]}")
 
                     # question_text = tokenizer.batch_decode(batch['input']['input_ids'], skip_special_tokens = True)
                     # '\n'.join(question_text),iter)

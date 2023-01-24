@@ -73,10 +73,11 @@ class E2Edataclass:
             for t_id, turn in enumerate(dial["log"]):
                 for key in ontology.QA["all_domain"]:
                     q = ontology.QA[key]["description1"]
-                    q += turn["user"]
+                    # q += turn["user"]
                     if key in turn["belief"]:
                         a = turn["belief"][key]
                     else:
+                        continue
                         a = ontology.QA["NOT_MENTIONED"]
 
                     question.append(q)

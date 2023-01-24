@@ -10,7 +10,7 @@ from logger_conf import CreateLogger
 from transformers import AutoModel, AutoConfig, AutoTokenizer
 import torch.nn as nn
 import torch.nn.functional as F
-from dataclass import E2Edataclass
+from dataclass_long import E2Edataclass
 from logger_conf import CreateLogger
 
 from transformers import T5Tokenizer, Adafactor
@@ -22,6 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 from evaluate import acc_metric
 
 from model import Our_Transformer
+from transformers import get_scheduler
 
 parser = argparse.ArgumentParser()
 
@@ -38,7 +39,7 @@ parser.add_argument("--audio_test_list", type=str)
 # training setting
 parser.add_argument("--short", type=int, default=0)
 parser.add_argument("--seed", type=int, default=1)
-parser.add_argument("--max_epoch", type=int, default=1)
+parser.add_argument("--max_epoch", type=int, default=10)
 parser.add_argument("--gpus", default=1, type=int, help="number of gpus per node")
 parser.add_argument("--save_prefix", type=str, default="")
 parser.add_argument("--patient", type=int, help="prefix for all savings", default=3)
@@ -136,22 +137,25 @@ if __name__ == "__main__":
         short=args.short,
     )
 
-    test_data_loader = torch.utils.data.DataLoader(
-        dataset=test_dataset, batch_size=4, collate_fn=test_dataset.collate_fn
-    )
-
     optimizer_setting = {
-        "warmup_init": True,
+        "lr": 1e-4,
+        "warmup_init": False,
         "eps": (1e-30, 1e-3),
         "clip_threshold": 1.0,
         "decay_rate": -0.8,
         "beta1": None,
         "weight_decay": 0.0,
-        "relative_step": True,
+        "relative_step": False,
         "scale_parameter": False,
     }
 
     optimizer = Adafactor(model.parameters(), **optimizer_setting)
+    scheduler = get_scheduler(
+        "linear",
+        optimizer=optimizer,
+        num_warmup_steps=500,
+        num_training_steps=5 * len(train_dataset),
+    )
 
     trainer_setting = {
         "train_batch_size": args.batch_size_per_gpu * args.gpus,
@@ -168,6 +172,7 @@ if __name__ == "__main__":
         valid_data=dev_dataset,
         test_data=test_dataset,
         optimizer=optimizer,
+        scheduler=scheduler,
         logger_name="model",
         evaluate_fnc=acc_metric,
         **trainer_setting,
