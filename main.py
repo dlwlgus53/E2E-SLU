@@ -48,7 +48,7 @@ parser.add_argument("--batch_size_per_gpu", type=int, default=16)
 parser.add_argument("--test_batch_size_per_gpu", type=int, default=16)
 parser.add_argument("--use_fine_trained", type=str)
 parser.add_argument("--model_config", type=str, default="./configs/transformer.json")
-parser.add_argument("--text_encoder_freeze", type=int, defulat=0)
+parser.add_argument("--text_encoder_freeze", type=int, default=0)
 parser.add_argument("--audio_encoder_freeze", type=int, default=0)
 parser.add_argument("--text_encoder_model", type=str, default="bert-base-uncased")
 
