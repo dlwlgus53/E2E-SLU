@@ -67,6 +67,8 @@ class E2Edataclass:
                 ans.append(f" {dict_bspn[domain_slot]}")
 
         ans = "".join(ans)
+        if ans == "":
+            ans = "empty"
         return ans
 
     def bspn_to_dict(self, str_bspn):
@@ -100,6 +102,8 @@ class E2Edataclass:
             dial = dataset[d_id]
             for t_id, turn in enumerate(dial["log"]):
                 q = "What is the belief state of this dialouge"
+                # this is for debugging
+                q += turn["user"]
                 a = self.make_bspn(turn["curr_belief"])
                 if turn["curr_belief"] != self.bspn_to_dict(a):
                     pdb.set_trace()
@@ -204,7 +208,7 @@ class E2Edataclass:
 
         return {
             "text_input": question,
-            "target": target,
+            "label": target,
             "turn_id": turn_id,
             "dial_id": dial_id,
             "user_audio_input": user_audio_input,
