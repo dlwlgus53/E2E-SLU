@@ -66,14 +66,12 @@ class TextEncoder(nn.Module):
 class Slot_Gate(nn.Module):
     def __init__(self, dim):
         super(Slot_Gate, self).__init__()
-        self.fc1 = nn.Linear(dim * 2, dim)  # sys + user = 2
-        self.fc2 = nn.Linear(dim, int(dim / 2))
-        self.fc3 = nn.Linear(int(dim / 2), 1)
+        self.fc1 = nn.Linear(dim, int(dim / 2))
+        self.fc2 = nn.Linear(int(dim / 2), 1)
 
-    def forward(self, emb):
-        x = self.fc1(emb)  # B x H(512)
-        x = self.fc2(x)  # B x H(512)
-        x = torch.sigmoid(self.fc3(x))
+    def forward(self, x):
+        x = self.fc1(x)  # B x H(512)
+        x = torch.sigmoid(self.fc2(x))
         return x
 
 
@@ -157,16 +155,14 @@ class Our_Transformer(nn.Module):
         #     inputs_embeds=src,  # add audio
         #     labels=batch["label"]["input_ids"].to(self.device),
         # )
-        gate_output = self.SlotGate(
-            torch.cat(
-                [sys_audio_src["embeddings"], user_audio_src["embeddings"]], axis=1
-            )  # B x (H*2)
-        )
+
         output = self.transformer(
             inputs_embeds=src,  # add audio
             attention_mask=mask,  # add audio
             labels=batch["label"]["input_ids"].to(self.device),
         )
+
+        gate_output = self.SlotGate(output["encoder_last_hidden_state"][:, 0, :])
         return output, gate_output
 
 

@@ -208,9 +208,7 @@ class Trainer:
             batch_size=self.test_batch_size,
             collate_fn=self.test_data.collate_fn,
         )
-        pred_dict = defaultdict(
-            lambda: defaultdict(dict)
-        )  # dial_id, # turn_id # schema
+        pred_dict = defaultdict(dict)  # dial_id, # turn_id # schema
         self.model.eval()
         loss_sum = 0
         self.logger.info("Test start")
@@ -245,9 +243,11 @@ class Trainer:
                     pred_gate,
                     predict_text,
                 ):
+                    if t not in pred_dict[d]:
+                        pred_dict[d][t] = {}
+
                     if p_g == 1:
                         pred_dict[d][t][s] = p_t
-
         pred_dict = self.curr_belief_to_normal_belef(
             dict(pred_dict)
         )  # Previsou has only currrent belief
@@ -260,10 +260,7 @@ class Trainer:
                 if t_id == 0:
                     pass
                 else:
-                    pred_dict[d_id][t_id] = {
-                        **pred_dict[d_id][t_id],
-                        **pred_dict[d_id][t_id - 1],
-                    }
+                    pred_dict[d_id][t_id].update(pred_dict[d_id][t_id - 1])
         return pred_dict
 
     def string_to_dict(slef, belief_str):

@@ -18,6 +18,7 @@ import os
 from transformers import AutoModel, AutoTokenizer, AutoConfig, Wav2Vec2Processor
 from speech.wav2vec2_modeling import build_paired_audio, PairedAudioData
 
+import random
 
 # logging.set_verbosity_error()
 
@@ -33,9 +34,14 @@ class E2Edataclass:
         self.data_type = data_type
         self.short = short
 
-        dial_id, turn_id, schema, question, target, belief = self.raw_data_to_list(
-            raw_text_dataset
-        )
+        (
+            dial_id,
+            turn_id,
+            schema,
+            question,
+            target,
+            belief,
+        ) = self.raw_data_to_list_ratio(raw_text_dataset)
 
         self.dial_id = dial_id
         self.turn_id = turn_id
@@ -127,6 +133,60 @@ class E2Edataclass:
             "sys_audio": input_values_dict["system"],
             "user_audio": input_values_dict["user"],
         }
+
+    def raw_data_to_list_ratio(self, dataset):
+        dial_id, turn_id, schema, question, target, belief = [], [], [], [], [], []
+        dial_num = 0
+        S = 0
+        for d_id in dataset.keys():
+            S += 1
+            if self.short == True and S > 5:
+                break
+            dial_num += 1
+            dial = dataset[d_id]
+            for t_id, turn in enumerate(dial["log"]):
+                if len(turn["curr_belief"]) == 0:
+                    key = random.choice(ontology.QA["all_domain"])
+                    q = ontology.QA[key]["description1"]
+                    a = ontology.QA["NOT_MENTIONED"]
+
+                    question.append(q)
+                    target.append(a)
+                    belief.append(turn["belief"])
+                    schema.append(key)
+                    dial_id.append(d_id)
+                    turn_id.append(t_id)
+                else:
+                    for key in ontology.QA["all_domain"]:
+                        q = ontology.QA[key]["description1"]
+                        # q += turn["user"]
+                        if key in turn["curr_belief"]:
+                            a1 = turn["curr_belief"][key]
+
+                            a2 = ontology.QA["NOT_MENTIONED"]
+                            key2 = random.choice(
+                                list(
+                                    set(ontology.QA["all_domain"])
+                                    - set(turn["curr_belief"].keys())
+                                )
+                            )
+
+                            question.append(q)
+                            target.append(a1)
+                            belief.append(turn["belief"])
+                            schema.append(key)
+                            dial_id.append(d_id)
+                            turn_id.append(t_id)
+
+                            question.append(q)
+                            target.append(a2)
+                            belief.append(turn["belief"])
+                            schema.append(key2)
+                            dial_id.append(d_id)
+                            turn_id.append(t_id)
+
+        print(f"total dial num is {dial_num}")
+        return dial_id, turn_id, schema, question, target, belief
 
     def collate_fn(self, batch):
         """
