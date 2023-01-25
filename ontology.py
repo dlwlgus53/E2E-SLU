@@ -255,6 +255,6 @@ QA = {
         "taxi-arrive",
         "taxi-departure",
     ],
-    "bigger-domain": ["train", "taxi", "hotel", "restaurant", "attraction"],
+    "bigger_domain": ["train", "taxi", "hotel", "restaurant", "attraction"],
     "NOT_MENTIONED": "not mentioned",
 }

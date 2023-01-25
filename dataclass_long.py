@@ -28,16 +28,21 @@ class E2Edataclass:
     ):
         self.text_tokenizer = text_tokenizer
         self.text_max_length = text_tokenizer.model_max_length
+        self.text_data_path = text_data_path
         raw_text_dataset = json.load(open(text_data_path, "r"))
         self.data_type = data_type
         self.short = short
 
-        dial_id, turn_id, question, target = self.raw_data_to_list(raw_text_dataset)
+        dial_id, turn_id, schema, question, target, belief = self.raw_data_to_list(
+            raw_text_dataset
+        )
 
         self.dial_id = dial_id
         self.turn_id = turn_id
+        self.schema = schema
         self.question = question
         self.target = target
+        self.belief = belief
 
         self.processor = Wav2Vec2Processor.from_pretrained(
             "facebook/wav2vec2-base"
@@ -61,12 +66,12 @@ class E2Edataclass:
         return path_dict
 
     def raw_data_to_list(self, dataset):
-        dial_id, turn_id, question, target = [], [], [], []
+        dial_id, turn_id, schema, question, target, belief = [], [], [], [], [], []
         dial_num = 0
         S = 0
         for d_id in dataset.keys():
             S += 1
-            if self.short == True and S > 100:
+            if self.short == True and S > 5:
                 break
             dial_num += 1
             dial = dataset[d_id]
@@ -74,25 +79,29 @@ class E2Edataclass:
                 for key in ontology.QA["all_domain"]:
                     q = ontology.QA[key]["description1"]
                     # q += turn["user"]
-                    if key in turn["belief"]:
-                        a = turn["belief"][key]
+
+                    if key in turn["curr_belief"]:
+                        a = turn["curr_belief"][key]
                     else:
-                        continue
                         a = ontology.QA["NOT_MENTIONED"]
 
                     question.append(q)
                     target.append(a)
+                    belief.append(turn["belief"])
+                    schema.append(key)
                     dial_id.append(d_id)
                     turn_id.append(t_id)
 
         print(f"total dial num is {dial_num}")
-        return dial_id, turn_id, question, target
+        return dial_id, turn_id, schema, question, target, belief
 
     def __getitem__(self, index):
         target = self.target[index]
         question = self.question[index]
+        schema = self.schema[index]
         turn_id = self.turn_id[index]
         dial_id = self.dial_id[index]
+        belief = self.dial_id[index]
 
         user_audio_path = self.audio_path_dict[dial_id][turn_id]["user"]
 
@@ -111,8 +120,10 @@ class E2Edataclass:
         return {
             "question": question,
             "target": target,
+            "belief": belief,
             "turn_id": turn_id,
             "dial_id": dial_id,
+            "schema": schema,
             "sys_audio": input_values_dict["system"],
             "user_audio": input_values_dict["user"],
         }
@@ -124,12 +135,16 @@ class E2Edataclass:
         """
         question = [x["question"] for x in batch]
         target = [x["target"] for x in batch]
+        belief = [x["belief"] for x in batch]
         turn_id = [x["turn_id"] for x in batch]
         dial_id = [x["dial_id"] for x in batch]
+        schema = [x["schema"] for x in batch]
 
         user_audio = [x["user_audio"] for x in batch]
         sys_audio = [x["sys_audio"] for x in batch]
-
+        gate_label = torch.tensor(
+            [1 if t != ontology.QA["NOT_MENTIONED"] else 0 for t in target]
+        ).to(torch.float)
         question = self.text_tokenizer.batch_encode_plus(
             question,
             max_length=self.text_max_length,
@@ -178,12 +193,14 @@ class E2Edataclass:
             input_values=processed_user_audio["input_values"],
             attention_mask=processed_user_audio["attention_mask"],
         )
-
         return {
             "text_input": question,
             "label": target,
+            "belief": belief,
+            "gate_label": gate_label,
             "turn_id": turn_id,
             "dial_id": dial_id,
+            "schema": schema,
             "user_audio_input": user_audio_input,
             "system_audio_input": system_audio_input,
         }

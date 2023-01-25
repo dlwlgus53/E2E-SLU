@@ -1,6 +1,5 @@
 import torch
 from torch import nn, Tensor
-from dataclass import E2Edataclass
 from transformers import BertConfig, EncoderDecoderConfig, EncoderDecoderModel
 from torch import nn
 from transformers import Trainer
@@ -14,6 +13,7 @@ import config as cfg
 import argparse
 import ontology
 import os
+import pdb
 from transformers import AutoModel, AutoConfig, Wav2Vec2Processor
 from speech.wav2vec2_modeling import build_paired_audio
 from speech.wav2vec2_modeling import AudioEncoder
@@ -63,6 +63,20 @@ class TextEncoder(nn.Module):
         }
 
 
+class Slot_Gate(nn.Module):
+    def __init__(self, dim):
+        super(Slot_Gate, self).__init__()
+        self.fc1 = nn.Linear(dim * 2, dim)  # sys + user = 2
+        self.fc2 = nn.Linear(dim, int(dim / 2))
+        self.fc3 = nn.Linear(int(dim / 2), 1)
+
+    def forward(self, emb):
+        x = self.fc1(emb)  # B x H(512)
+        x = self.fc2(x)  # B x H(512)
+        x = torch.sigmoid(self.fc3(x))
+        return x
+
+
 class Our_Transformer(nn.Module):
     def __init__(
         self,
@@ -74,6 +88,7 @@ class Our_Transformer(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.device = device
+        self.SlotGate = Slot_Gate(d_model).to(device)
         self.TextEncoder = TextEncoder(text_encoder, d_model, device).to(device)
         self.tokenizer = AutoTokenizer.from_pretrained(text_encoder)
         audio_config = PretrainedConfig()
@@ -142,23 +157,17 @@ class Our_Transformer(nn.Module):
         #     inputs_embeds=src,  # add audio
         #     labels=batch["label"]["input_ids"].to(self.device),
         # )
-
+        gate_output = self.SlotGate(
+            torch.cat(
+                [sys_audio_src["embeddings"], user_audio_src["embeddings"]], axis=1
+            )  # B x (H*2)
+        )
         output = self.transformer(
             inputs_embeds=src,  # add audio
             attention_mask=mask,  # add audio
             labels=batch["label"]["input_ids"].to(self.device),
         )
-        # attention_mask=mask,  # add attention
-
-        # output = self.transformer(
-        #     input_ids=batch["text_input"]["input_ids"].to(self.device),  # add audio
-        #     labels=batch["label"]["input_ids"].to(self.device),
-        # )
-
-        return output
-
-
-# device = "cpu"
+        return output, gate_output
 
 
 import numpy as np
@@ -169,28 +178,6 @@ def postprocess_text(preds, labels):
     labels = [[label.strip()] for label in labels]
 
     return preds, labels
-
-
-def compute_metrics(eval_preds):
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    preds, labels = eval_preds
-    if isinstance(preds, tuple):
-        preds = preds[0]
-    decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-
-    labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
-    decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-
-    decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
-    result = sacrebleu.compute(predictions=decoded_preds, references=decoded_labels)
-    result = {"bleu": result["score"]}
-
-    prediction_lens = [
-        np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds
-    ]
-    result["gen_len"] = np.mean(prediction_lens)
-    result = {k: round(v, 4) for k, v in result.items()}
-    return result
 
 
 if __name__ == "__main__":
