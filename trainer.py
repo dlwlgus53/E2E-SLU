@@ -49,12 +49,11 @@ class Trainer:
         self.patient = patient
         self.evaluate_fnc = evaluate_fnc
         self.loss_fn = nn.CrossEntropyLoss(reduction="none")
-        self.gate_loss_fn = nn.BCELoss()
         self.device = device
 
         os.makedirs(f"model/{self.save_prefix}", exist_ok=True)
 
-    def work(self, train_data=None, test=False, train=True, save=False, alpha=0.5):
+    def work(self, train_data=None, test=False, train=True, save=False):
         # TODO need clean here
 
         if train_data:
@@ -104,7 +103,7 @@ class Trainer:
     def pad_id_change(self, ids):
         ids[ids == -100] = self.tokenizer.pad_token_id
 
-    def train(self, epoch_num, alpha):
+    def train(self, epoch_num):
         train_max_iter = int(len(self.train_data) / self.train_batch_size)
         train_loader = torch.utils.data.DataLoader(
             dataset=self.train_data,
@@ -117,31 +116,14 @@ class Trainer:
 
         for iter, batch in enumerate(train_loader):
             self.optimizer.zero_grad()
-            outputs, gate_outputs = self.model(batch)
-            logits = outputs.logits
+            outputs = self.model(batch)
             batch["label"]["input_ids"] = batch["label"].input_ids.to(self.device)
             batch["gate_label"] = batch["gate_label"].to(self.device)
 
-            loss = self.loss_fn(
-                logits.view(-1, self.tokenizer.vocab_size),
-                batch["label"].input_ids.view(-1).to(self.device),
-            )
-            loss = loss.view(len(batch["gate_label"]), -1).mean(dim=1)
-            predict_loss = (loss * batch["gate_label"]).sum(dim=0) / batch[
-                "gate_label"
-            ].sum(dim=0)
-            gate_loss = self.gate_loss_fn(
-                gate_outputs, batch["gate_label"].to(torch.float).reshape(-1, 1)
-            )
+            loss = outputs.loss.mean()
 
-            # Gate Loss
-            if predict_loss.isnan():
-                final_loss = gate_loss
-            else:
-                final_loss = alpha * predict_loss + (1 - alpha) * gate_loss
-
-            final_loss.backward()
-            loss_sum += final_loss.detach().item()
+            loss.backward()
+            loss_sum += loss.detach().item()
 
             self.optimizer.step()
             self.scheduler.step()
@@ -163,18 +145,8 @@ class Trainer:
                     answer_text = self.tokenizer.batch_decode(
                         batch["label"]["input_ids"], skip_special_tokens=True
                     )
-
-                    pred_gate = torch.round(gate_outputs.view(-1)).detach().cpu()
-                    answer_gate = batch["gate_label"].detach().cpu()
-
-                    for (g_a, g_p, t_a, t_p) in zip(
-                        answer_gate, pred_gate, answer_text, predict_text
-                    ):
-                        self.logger.info(
-                            f"g_a {int(g_a.item())}, g_p {int(g_p.item())}"
-                        )
-                        if g_a == 1:
-                            self.logger.info(f"t_a {t_a} t_p {t_p}")
+                    for (t_a, t_p) in zip(answer_text, predict_text):
+                        self.logger.info(f"t_a {t_a} t_p {t_p}")
 
     def valid(self, epoch_num):
         valid_max_iter = int(len(self.valid_data) / self.test_batch_size)
@@ -188,7 +160,7 @@ class Trainer:
         self.logger.info("Validation Start")
         with torch.no_grad():
             for iter, batch in enumerate(valid_loader):
-                outputs, gate_outputs = self.model(batch)
+                outputs = self.model(batch)
                 loss = outputs.loss.mean()
 
                 loss_sum += loss.detach()
@@ -228,19 +200,13 @@ class Trainer:
                     batch["label"]["input_ids"], skip_special_tokens=True
                 )
 
-                pred_gate = torch.round(gate_outputs.view(-1)).detach().cpu().tolist()
-                answer_gate = batch["gate_label"].detach().cpu().tolist()
-
                 answer.extend(answer_text)
                 pred.extend(predict_text)
-                answer_gate_list.extend(answer_gate)
-                pred_gate_list.extend(pred_gate)
 
-                for d, t, s, p_g, p_t in zip(
+                for d, t, s, p_t in zip(
                     batch["dial_id"],
                     batch["turn_id"],
                     batch["schema"],
-                    pred_gate,
                     predict_text,
                 ):
                     if t not in pred_dict[d]:

@@ -9,14 +9,12 @@ from collections import OrderedDict
 from logger_conf import CreateLogger
 from transformers import AutoModel, AutoConfig, AutoTokenizer
 import torch.nn as nn
-import torch.nn.functional as F
 from dataclass_long import E2Edataclass
 from logger_conf import CreateLogger
 
-from transformers import T5Tokenizer, Adafactor
+from transformers import Adafactor
 from transformers.optimization import AdamW, get_linear_schedule_with_warmup
 from trainer import Trainer
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from evaluate import acc_metric
@@ -43,9 +41,7 @@ parser.add_argument("--max_epoch", type=int, default=10)
 parser.add_argument("--gpus", default=1, type=int, help="number of gpus per node")
 parser.add_argument("--save_prefix", type=str, default="")
 parser.add_argument("--patient", type=int, help="prefix for all savings", default=3)
-parser.add_argument(
-    "--alpha", type=float, help="weight for gate loss and normal loss", default=0.5
-)
+
 parser.add_argument("--train", type=int, help="1: Do 0: Do not", default=1)
 parser.add_argument("--test", type=int, help="1: Do 0: Do not", default=1)
 parser.add_argument("--save", type=int, help="1: Do 0: Do not", default=1)

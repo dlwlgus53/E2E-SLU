@@ -86,7 +86,6 @@ class Our_Transformer(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.device = device
-        self.SlotGate = Slot_Gate(d_model).to(device)
         self.TextEncoder = TextEncoder(text_encoder, d_model, device).to(device)
         self.tokenizer = AutoTokenizer.from_pretrained(text_encoder)
         audio_config = PretrainedConfig()
@@ -151,22 +150,13 @@ class Our_Transformer(nn.Module):
         ]
 
         batch["label"]["input_ids"] = torch.tensor(batch["label"]["input_ids"])
-        # output = self.transformer(
-        #     inputs_embeds=src,  # add audio
-        #     labels=batch["label"]["input_ids"].to(self.device),
-        # )
 
         output = self.transformer(
             inputs_embeds=src,  # add audio
             attention_mask=mask,  # add audio
             labels=batch["label"]["input_ids"].to(self.device),
         )
-
-        gate_output = self.SlotGate(output["encoder_last_hidden_state"][:, 0, :])
-        return output, gate_output
-
-
-import numpy as np
+        return output
 
 
 def postprocess_text(preds, labels):
